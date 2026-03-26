@@ -2,7 +2,7 @@ import { App, PluginSettingTab, Setting } from 'obsidian';
 import type KanbanBlockPlugin from './main';
 import { t, Language, tp } from './i18n';
 
-export type ColumnStyle = 'none' | 'fade';
+export type ColumnStyle = 'none' | 'fade' | 'delete-line';
 
 export interface ColumnConfig {
 	id: string;
@@ -21,6 +21,14 @@ export interface KanbanBlockSettings {
 
 const MIN_COLUMN_COUNT = 1;
 const MAX_COLUMN_COUNT = 10;
+
+function normalizeColumnStyle(style: unknown): ColumnStyle {
+	if (typeof style !== 'string') return 'none';
+	const normalized = style.trim().toLowerCase();
+	if (normalized === 'fade') return 'fade';
+	if (normalized === 'delete-line' || normalized === 'deleteline') return 'delete-line';
+	return 'none';
+}
 
 function sanitizeMarker(marker: string, fallback = ' '): string {
 	if (marker.length === 0) return fallback;
@@ -44,7 +52,7 @@ function resizeColumns(columns: ColumnConfig[], count: number, lang: Language): 
 		id: col.id || `column-${idx + 1}`,
 		name: col.name || defaultColumnName(idx, lang),
 		marker: sanitizeMarker(col.marker ?? ' '),
-		style: (col.style === 'fade' ? 'fade' : 'none') as ColumnStyle,
+		style: normalizeColumnStyle(col.style),
 	}));
 
 	for (let i = next.length; i < count; i++) {
@@ -82,7 +90,7 @@ export function normalizeSettings(raw: unknown): KanbanBlockSettings {
 			id: typeof col.id === 'string' && col.id ? col.id : `column-${idx + 1}`,
 			name: typeof col.name === 'string' && col.name ? col.name : defaultColumnName(idx, language),
 			marker: sanitizeMarker(typeof col.marker === 'string' ? col.marker : ' '),
-			style: (col.style === 'fade' ? 'fade' : 'none') as ColumnStyle,
+			style: normalizeColumnStyle(col.style),
 		}));
 	} else if (hasLegacyColumns) {
 		columns = createBaseColumns(language).map((col) => {
@@ -192,9 +200,10 @@ export class KanbanBlockSettingTab extends PluginSettingTab {
 				.addDropdown(dropdown => dropdown
 					.addOption('none', t('settings_style_none', this.plugin.settings.language))
 					.addOption('fade', t('settings_style_fade', this.plugin.settings.language))
+					.addOption('delete-line', t('settings_style_delete_line', this.plugin.settings.language))
 					.setValue(column.style)
 					.onChange(async (value: ColumnStyle) => {
-						column.style = value === 'fade' ? 'fade' : 'none';
+						column.style = normalizeColumnStyle(value);
 						await this.plugin.saveSettings();
 					}));
 		});

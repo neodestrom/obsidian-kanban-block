@@ -2,7 +2,7 @@ import { App, Component, MarkdownRenderer } from 'obsidian';
 import { TodoItem, TodoState, KanbanColumn } from './types';
 import { itemsToMarkdown } from './parser';
 import { KanbanSuggest } from './suggest';
-import { ColumnConfig } from './settings';
+import { ColumnConfig, ColumnStyle } from './settings';
 import { Language, tp } from './i18n';
 
 export class KanbanBoard {
@@ -108,6 +108,24 @@ export class KanbanBoard {
 		return this.columns.find(column => column.id === state);
 	}
 
+	private getStyleByState(state: TodoState): ColumnStyle {
+		return this.getColumnByState(state)?.style ?? 'none';
+	}
+
+	private applyDeleteLine(text: string): string {
+		const trimmed = text.trim();
+		if (trimmed.length === 0) return text;
+		if (/^~~\((.*)\)~~$/.test(trimmed)) return trimmed;
+		return `~~(${trimmed})~~`;
+	}
+
+	private removeDeleteLine(text: string): string {
+		const trimmed = text.trim();
+		const match = trimmed.match(/^~~\((.*)\)~~$/);
+		if (!match) return text;
+		return match[1] ?? '';
+	}
+
 	private render(): void {
 		this.container.empty();
 		this.container.addClass('kanban-wrapper');
@@ -162,7 +180,7 @@ export class KanbanBoard {
 		card.draggable = true;
 
 		const currentColumn = this.getColumnByState(item.state);
-		if (currentColumn?.style === 'fade') {
+		if (currentColumn?.style === 'fade' || currentColumn?.style === 'delete-line') {
 			card.addClass('kanban-card-fade');
 		}
 
@@ -365,8 +383,17 @@ export class KanbanBoard {
 	}
 
 	private insertItem(item: TodoItem, newState: TodoState, beforeId?: string, silent = false): void {
+		const oldState = item.state;
+		const oldStyle = this.getStyleByState(oldState);
+		const newStyle = this.getStyleByState(newState);
+
 		// Update item state
 		item.state = newState;
+		if (newStyle === 'delete-line') {
+			item.text = this.applyDeleteLine(item.text);
+		} else if (oldStyle === 'delete-line') {
+			item.text = this.removeDeleteLine(item.text);
+		}
 
 		// Remove from current position if it exists
 		const index = this.items.findIndex(i => i.id === item.id);
@@ -487,7 +514,9 @@ export class KanbanBoard {
 				// Remove item if text is empty
 				deleteItem();
 			} else {
-				item.text = newText;
+				item.text = this.getStyleByState(item.state) === 'delete-line'
+					? this.applyDeleteLine(newText)
+					: newText;
 				this.render();
 				void this.triggerUpdate();
 			}
@@ -558,7 +587,9 @@ export class KanbanBoard {
 				deleteItem();
 				return;
 			}
-			item.text = newText || 'New Item';
+			item.text = this.getStyleByState(item.state) === 'delete-line'
+				? this.applyDeleteLine(newText)
+				: (newText || 'New Item');
 			this.render();
 			void this.triggerUpdate();
 		};

@@ -25,6 +25,7 @@ interface Translations {
     settings_column_style: string;
     settings_style_none: string;
     settings_style_fade: string;
+    settings_style_delete_line: string;
     settings_center_board: string;
     settings_center_board_desc: string;
     settings_todo_column: string;
@@ -56,6 +57,7 @@ const translations: Record<Language, Translations> = {
         settings_column_style: 'Style',
         settings_style_none: 'None',
         settings_style_fade: 'Fade',
+        settings_style_delete_line: 'Delete Line',
         settings_center_board: 'Center Board',
         settings_center_board_desc: 'Center the kanban board horizontally',
         settings_todo_column: 'To Do Column',
@@ -84,7 +86,8 @@ const translations: Record<Language, Translations> = {
         settings_column_marker_desc: '只输入方括号内的单个符号字符。',
         settings_column_style: '样式',
         settings_style_none: 'None',
-        settings_style_fade: 'Fade',
+        settings_style_fade: '淡化',
+        settings_style_delete_line: '删除线',
         settings_center_board: '居中看板',
         settings_center_board_desc: '让看板在水平方向居中显示',
         settings_todo_column: '待办列',
@@ -114,6 +117,7 @@ const translations: Record<Language, Translations> = {
         settings_column_style: 'Style',
         settings_style_none: 'None',
         settings_style_fade: 'Fade',
+        settings_style_delete_line: 'Barré',
         settings_center_board: 'Centrer le tableau',
         settings_center_board_desc: 'Centrer le tableau kanban horizontalement',
         settings_todo_column: 'Colonne À faire',
@@ -143,6 +147,7 @@ const translations: Record<Language, Translations> = {
         settings_column_style: 'Estilo',
         settings_style_none: 'None',
         settings_style_fade: 'Fade',
+        settings_style_delete_line: 'Tachado',
         settings_center_board: 'Centrar tablero',
         settings_center_board_desc: 'Centrar el tablero kanban horizontalmente',
         settings_todo_column: 'Columna Por hacer',
