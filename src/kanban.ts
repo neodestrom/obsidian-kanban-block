@@ -2,10 +2,8 @@ import { App, Component, MarkdownRenderer } from 'obsidian';
 import { TodoItem, TodoState, KanbanColumn } from './types';
 import { itemsToMarkdown } from './parser';
 import { KanbanSuggest } from './suggest';
-import { ColumnNames } from './settings';
-import { Language } from './i18n';
-
-const STATE_ORDER: TodoState[] = ['todo', 'in-progress', 'done'];
+import { ColumnConfig } from './settings';
+import { Language, tp } from './i18n';
 
 export class KanbanBoard {
 	private container: HTMLElement;
@@ -15,10 +13,11 @@ export class KanbanBoard {
 	private app: App;
 	private component: Component;
 	private sourcePath: string;
-	private columnNames: ColumnNames;
+	private columns: ColumnConfig[];
 	private centerBoard: boolean;
 	private language: Language;
 	private deleteDelay: number;
+	private unmatchedCount: number;
 	private draggedItem: TodoItem | null = null;
 	private draggedElement: HTMLElement | null = null;
 	private lastMarkdown: string;
@@ -32,10 +31,11 @@ export class KanbanBoard {
 		app: App,
 		component: Component,
 		sourcePath: string,
-		columnNames: ColumnNames,
+		columns: ColumnConfig[],
 		centerBoard: boolean,
 		language: Language,
-		deleteDelay: number
+		deleteDelay: number,
+		unmatchedCount: number
 	) {
 		this.container = container;
 		this.items = items;
@@ -44,11 +44,12 @@ export class KanbanBoard {
 		this.app = app;
 		this.component = component;
 		this.sourcePath = sourcePath;
-		this.columnNames = columnNames;
+		this.columns = columns;
 		this.centerBoard = centerBoard;
 		this.language = language;
 		this.deleteDelay = deleteDelay;
-		this.lastMarkdown = itemsToMarkdown(this.items, this.ignoredLines);
+		this.unmatchedCount = unmatchedCount;
+		this.lastMarkdown = itemsToMarkdown(this.items, this.columns, this.ignoredLines);
 
 		this.render();
 		this.setupBoardEvents();
@@ -87,7 +88,7 @@ export class KanbanBoard {
 	}
 
 	private async triggerUpdate(): Promise<void> {
-		const newMarkdown = itemsToMarkdown(this.items, this.ignoredLines);
+		const newMarkdown = itemsToMarkdown(this.items, this.columns, this.ignoredLines);
 		if (newMarkdown !== this.lastMarkdown) {
 			await this.onUpdate(newMarkdown, this.lastMarkdown);
 			this.lastMarkdown = newMarkdown;
@@ -95,15 +96,16 @@ export class KanbanBoard {
 	}
 
 	private getColumns(): KanbanColumn[] {
-		const columns: { state: TodoState; title: string }[] = [
-			{ state: 'todo', title: this.columnNames.todo },
-			{ state: 'in-progress', title: this.columnNames.inProgress },
-			{ state: 'done', title: this.columnNames.done },
-		];
-		return columns.map(col => ({
+		return this.columns.map(col => ({
+			state: col.id,
+			title: col.name,
 			...col,
-			items: this.items.filter(item => item.state === col.state),
+			items: this.items.filter(item => item.state === col.id),
 		}));
+	}
+
+	private getColumnByState(state: TodoState): ColumnConfig | undefined {
+		return this.columns.find(column => column.id === state);
 	}
 
 	private render(): void {
@@ -114,6 +116,13 @@ export class KanbanBoard {
 			this.container.createDiv({
 				cls: 'kanban-warning',
 				text: '⚠ Some lines are not checkboxes and may be lost on edit.'
+			});
+		}
+
+		if (this.unmatchedCount > 0) {
+			this.container.createDiv({
+				cls: 'kanban-warning',
+				text: `⚠ ${tp('board_unmatched_notice', this.language, { count: String(this.unmatchedCount) })}`
 			});
 		}
 
@@ -152,8 +161,9 @@ export class KanbanBoard {
 		card.dataset['id'] = item.id;
 		card.draggable = true;
 
-		if (item.state === 'done') {
-			card.addClass('kanban-card-done');
+		const currentColumn = this.getColumnByState(item.state);
+		if (currentColumn?.style === 'fade') {
+			card.addClass('kanban-card-fade');
 		}
 
 		const textEl = card.createDiv({ cls: 'kanban-card-text' });
@@ -311,7 +321,7 @@ export class KanbanBoard {
 							id: crypto.randomUUID(),
 							text: cardText,
 							state: state,
-							originalMarker: state === 'done' ? 'x' : state === 'in-progress' ? '/' : ' ',
+							originalMarker: this.getColumnByState(state)?.marker ?? ' ',
 							children: [],
 						};
 
@@ -382,13 +392,15 @@ export class KanbanBoard {
 				this.items.splice(lastSameState.idx + 1, 0, item);
 			} else {
 				// Find position based on column order
-				const stateOrder = STATE_ORDER;
+				const stateOrder = this.columns.map(column => column.id);
 				const targetStateIndex = stateOrder.indexOf(newState);
+				const normalizedTargetIndex = targetStateIndex === -1 ? Number.MAX_SAFE_INTEGER : targetStateIndex;
 
 				let insertIndex = 0;
 				for (let i = 0; i < this.items.length; i++) {
 					const itemStateIndex = stateOrder.indexOf(this.items[i]!.state);
-					if (itemStateIndex <= targetStateIndex) {
+					const normalizedItemIndex = itemStateIndex === -1 ? Number.MAX_SAFE_INTEGER : itemStateIndex;
+					if (normalizedItemIndex <= normalizedTargetIndex) {
 						insertIndex = i + 1;
 					}
 				}
@@ -408,7 +420,7 @@ export class KanbanBoard {
 			id: crypto.randomUUID(),
 			text: '',
 			state,
-			originalMarker: state === 'done' ? 'x' : state === 'in-progress' ? '/' : ' ',
+			originalMarker: this.getColumnByState(state)?.marker ?? ' ',
 			children: [],
 		};
 
