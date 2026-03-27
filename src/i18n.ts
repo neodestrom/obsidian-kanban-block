@@ -26,6 +26,8 @@ interface Translations {
     settings_style_none: string;
     settings_style_fade: string;
     settings_style_delete_line: string;
+    settings_column_collapse: string;
+    settings_column_collapse_desc: string;
     settings_center_board: string;
     settings_center_board_desc: string;
     settings_todo_column: string;
@@ -58,6 +60,8 @@ const translations: Record<Language, Translations> = {
         settings_style_none: 'None',
         settings_style_fade: 'Fade',
         settings_style_delete_line: 'Delete Line',
+        settings_column_collapse: 'Collapse',
+        settings_column_collapse_desc: 'Do not stretch this column to board height.',
         settings_center_board: 'Center Board',
         settings_center_board_desc: 'Center the kanban board horizontally',
         settings_todo_column: 'To Do Column',
@@ -88,6 +92,8 @@ const translations: Record<Language, Translations> = {
         settings_style_none: 'None',
         settings_style_fade: '淡化',
         settings_style_delete_line: '删除线',
+        settings_column_collapse: '坍缩',
+        settings_column_collapse_desc: '开启后该列不再拉伸到看板整体高度。',
         settings_center_board: '居中看板',
         settings_center_board_desc: '让看板在水平方向居中显示',
         settings_todo_column: '待办列',
@@ -118,6 +124,8 @@ const translations: Record<Language, Translations> = {
         settings_style_none: 'None',
         settings_style_fade: 'Fade',
         settings_style_delete_line: 'Barré',
+        settings_column_collapse: 'Réduire',
+        settings_column_collapse_desc: 'Ne pas étirer cette colonne à la hauteur du tableau.',
         settings_center_board: 'Centrer le tableau',
         settings_center_board_desc: 'Centrer le tableau kanban horizontalement',
         settings_todo_column: 'Colonne À faire',
@@ -148,6 +156,8 @@ const translations: Record<Language, Translations> = {
         settings_style_none: 'None',
         settings_style_fade: 'Fade',
         settings_style_delete_line: 'Tachado',
+        settings_column_collapse: 'Colapsar',
+        settings_column_collapse_desc: 'No estirar esta columna a toda la altura del tablero.',
         settings_center_board: 'Centrar tablero',
         settings_center_board_desc: 'Centrar el tablero kanban horizontalmente',
         settings_todo_column: 'Columna Por hacer',

@@ -5,6 +5,8 @@ import { KanbanSuggest } from './suggest';
 import { ColumnConfig, ColumnStyle } from './settings';
 import { Language, tp } from './i18n';
 
+const COLLAPSED_COLUMN_MIN_HEIGHT = 180;
+
 export class KanbanBoard {
 	private container: HTMLElement;
 	private items: TodoItem[];
@@ -81,9 +83,15 @@ export class KanbanBoard {
 
 		document.addEventListener('dragover', handleDocumentDragOver);
 
+		const handleWindowResize = () => {
+			this.applyCollapsedColumnLayout();
+		};
+		window.addEventListener('resize', handleWindowResize);
+
 		// Clean up listener when component unloads
 		this.component.register(() => {
 			document.removeEventListener('dragover', handleDocumentDragOver);
+			window.removeEventListener('resize', handleWindowResize);
 		});
 	}
 
@@ -110,6 +118,16 @@ export class KanbanBoard {
 
 	private getStyleByState(state: TodoState): ColumnStyle {
 		return this.getColumnByState(state)?.style ?? 'none';
+	}
+
+	private shouldFadeByStyle(style: ColumnStyle): boolean {
+		return style === 'fade' || style === 'delete-line';
+	}
+
+	private formatTextForState(text: string, state: TodoState): string {
+		return this.getStyleByState(state) === 'delete-line'
+			? this.applyDeleteLine(text)
+			: text;
 	}
 
 	private applyDeleteLine(text: string): string {
@@ -150,10 +168,93 @@ export class KanbanBoard {
 		for (const column of columns) {
 			this.renderColumn(board, column);
 		}
+
+		requestAnimationFrame(() => {
+			this.applyCollapsedColumnLayout();
+		});
+	}
+
+	private applyCollapsedColumnLayout(): void {
+		const board = this.container.querySelector<HTMLElement>('.kanban-board');
+		if (!board) return;
+
+		const collapsedColumns = Array.from(board.querySelectorAll<HTMLElement>('.kanban-column-collapsed'));
+		if (collapsedColumns.length === 0) return;
+
+		const baseColumns = Array.from(board.querySelectorAll<HTMLElement>('.kanban-column:not(.kanban-column-collapsed)'));
+		let referenceHeight = 0;
+		for (const column of baseColumns) {
+			referenceHeight = Math.max(referenceHeight, Math.ceil(this.getColumnNaturalHeight(column)));
+		}
+
+		const targetHeight = Math.max(referenceHeight, COLLAPSED_COLUMN_MIN_HEIGHT);
+
+		for (const column of collapsedColumns) {
+			const nonItemsHeight = this.getColumnNonItemsHeight(column);
+			column.style.height = `${targetHeight}px`;
+			column.style.minHeight = `${targetHeight}px`;
+			column.style.maxHeight = `${targetHeight}px`;
+			column.style.overflow = 'hidden';
+			column.style.alignSelf = 'flex-start';
+
+			const itemsContainer = column.querySelector<HTMLElement>('.kanban-column-items');
+			if (itemsContainer) {
+				const itemsHeight = Math.max(targetHeight - nonItemsHeight, 0);
+				itemsContainer.style.flex = '0 0 auto';
+				itemsContainer.style.height = `${itemsHeight}px`;
+				itemsContainer.style.maxHeight = `${itemsHeight}px`;
+				itemsContainer.style.minHeight = '0';
+				itemsContainer.style.overflowY = 'auto';
+			}
+		}
+	}
+
+	private getPx(styleValue: string | null | undefined): number {
+		const parsed = Number.parseFloat(styleValue ?? '0');
+		return Number.isFinite(parsed) ? parsed : 0;
+	}
+
+	private getOuterHeightWithMargin(el: HTMLElement | null): number {
+		if (!el) return 0;
+		const style = getComputedStyle(el);
+		return el.offsetHeight + this.getPx(style.marginTop) + this.getPx(style.marginBottom);
+	}
+
+	private getColumnNonItemsHeight(column: HTMLElement): number {
+		const columnStyle = getComputedStyle(column);
+		const verticalBox = this.getPx(columnStyle.paddingTop)
+			+ this.getPx(columnStyle.paddingBottom)
+			+ this.getPx(columnStyle.borderTopWidth)
+			+ this.getPx(columnStyle.borderBottomWidth);
+		const headerHeight = this.getOuterHeightWithMargin(column.querySelector<HTMLElement>('.kanban-column-header'));
+		const addBtnHeight = this.getOuterHeightWithMargin(column.querySelector<HTMLElement>('.kanban-add-btn'));
+		return verticalBox + headerHeight + addBtnHeight;
+	}
+
+	private getItemsNaturalHeight(itemsContainer: HTMLElement): number {
+		const style = getComputedStyle(itemsContainer);
+		const minHeight = this.getPx(style.minHeight);
+		const cards = Array.from(itemsContainer.querySelectorAll<HTMLElement>('.kanban-card'));
+		if (cards.length === 0) {
+			return minHeight;
+		}
+		const gap = this.getPx(style.rowGap || style.gap);
+		const cardsHeight = cards.reduce((sum, card) => sum + card.offsetHeight, 0);
+		return Math.max(minHeight, cardsHeight + gap * Math.max(cards.length - 1, 0));
+	}
+
+	private getColumnNaturalHeight(column: HTMLElement): number {
+		const nonItemsHeight = this.getColumnNonItemsHeight(column);
+		const itemsContainer = column.querySelector<HTMLElement>('.kanban-column-items');
+		const itemsNaturalHeight = itemsContainer ? this.getItemsNaturalHeight(itemsContainer) : 0;
+		return nonItemsHeight + itemsNaturalHeight;
 	}
 
 	private renderColumn(board: HTMLElement, column: KanbanColumn): void {
 		const colEl = board.createDiv({ cls: 'kanban-column' });
+		if (column.collapse) {
+			colEl.addClass('kanban-column-collapsed');
+		}
 		colEl.dataset['state'] = column.state;
 
 		const header = colEl.createDiv({ cls: 'kanban-column-header' });
@@ -161,6 +262,9 @@ export class KanbanBoard {
 		header.createSpan({ text: String(column.items.length), cls: 'kanban-column-count' });
 
 		const itemsContainer = colEl.createDiv({ cls: 'kanban-column-items' });
+		if (column.collapse) {
+			itemsContainer.addClass('kanban-column-items-collapsed');
+		}
 		itemsContainer.dataset['state'] = column.state;
 
 		for (const item of column.items) {
@@ -179,8 +283,8 @@ export class KanbanBoard {
 		card.dataset['id'] = item.id;
 		card.draggable = true;
 
-		const currentColumn = this.getColumnByState(item.state);
-		if (currentColumn?.style === 'fade' || currentColumn?.style === 'delete-line') {
+		const currentStyle = this.getStyleByState(item.state);
+		if (this.shouldFadeByStyle(currentStyle)) {
 			card.addClass('kanban-card-fade');
 		}
 
@@ -514,9 +618,7 @@ export class KanbanBoard {
 				// Remove item if text is empty
 				deleteItem();
 			} else {
-				item.text = this.getStyleByState(item.state) === 'delete-line'
-					? this.applyDeleteLine(newText)
-					: newText;
+				item.text = this.formatTextForState(newText, item.state);
 				this.render();
 				void this.triggerUpdate();
 			}
@@ -587,9 +689,7 @@ export class KanbanBoard {
 				deleteItem();
 				return;
 			}
-			item.text = this.getStyleByState(item.state) === 'delete-line'
-				? this.applyDeleteLine(newText)
-				: (newText || 'New Item');
+			item.text = this.formatTextForState(newText, item.state);
 			this.render();
 			void this.triggerUpdate();
 		};

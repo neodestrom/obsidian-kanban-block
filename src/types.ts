@@ -18,4 +18,5 @@ export interface KanbanColumn {
 	state: TodoState;
 	title: string;
 	items: TodoItem[];
+	collapse?: boolean;
 }

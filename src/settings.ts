@@ -9,6 +9,7 @@ export interface ColumnConfig {
 	name: string;
 	marker: string;
 	style: ColumnStyle;
+	collapse: boolean;
 }
 
 export interface KanbanBlockSettings {
@@ -41,9 +42,9 @@ function defaultColumnName(index: number, lang: Language): string {
 
 function createBaseColumns(lang: Language): ColumnConfig[] {
 	return [
-		{ id: 'todo', name: t('column_todo', lang), marker: ' ', style: 'none' },
-		{ id: 'in-progress', name: t('column_in_progress', lang), marker: '/', style: 'none' },
-		{ id: 'done', name: t('column_done', lang), marker: 'x', style: 'fade' },
+		{ id: 'todo', name: t('column_todo', lang), marker: ' ', style: 'none', collapse: false },
+		{ id: 'in-progress', name: t('column_in_progress', lang), marker: '/', style: 'none', collapse: false },
+		{ id: 'done', name: t('column_done', lang), marker: 'x', style: 'fade', collapse: false },
 	];
 }
 
@@ -53,6 +54,7 @@ function resizeColumns(columns: ColumnConfig[], count: number, lang: Language): 
 		name: col.name || defaultColumnName(idx, lang),
 		marker: sanitizeMarker(col.marker ?? ' '),
 		style: normalizeColumnStyle(col.style),
+		collapse: Boolean(col.collapse),
 	}));
 
 	for (let i = next.length; i < count; i++) {
@@ -61,6 +63,7 @@ function resizeColumns(columns: ColumnConfig[], count: number, lang: Language): 
 			name: defaultColumnName(i, lang),
 			marker: i === 0 ? ' ' : i === 1 ? '/' : i === 2 ? 'x' : String(i + 1).slice(-1),
 			style: i === 2 ? 'fade' : 'none',
+			collapse: false,
 		});
 	}
 
@@ -91,6 +94,7 @@ export function normalizeSettings(raw: unknown): KanbanBlockSettings {
 			name: typeof col.name === 'string' && col.name ? col.name : defaultColumnName(idx, language),
 			marker: sanitizeMarker(typeof col.marker === 'string' ? col.marker : ' '),
 			style: normalizeColumnStyle(col.style),
+			collapse: Boolean(col.collapse),
 		}));
 	} else if (hasLegacyColumns) {
 		columns = createBaseColumns(language).map((col) => {
@@ -204,6 +208,16 @@ export class KanbanBlockSettingTab extends PluginSettingTab {
 					.setValue(column.style)
 					.onChange(async (value: ColumnStyle) => {
 						column.style = normalizeColumnStyle(value);
+						await this.plugin.saveSettings();
+					}));
+
+			new Setting(containerEl)
+				.setName(t('settings_column_collapse', this.plugin.settings.language))
+				.setDesc(t('settings_column_collapse_desc', this.plugin.settings.language))
+				.addToggle(toggle => toggle
+					.setValue(column.collapse)
+					.onChange(async (value) => {
+						column.collapse = value;
 						await this.plugin.saveSettings();
 					}));
 		});
